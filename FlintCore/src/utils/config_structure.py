@@ -11,7 +11,7 @@ config['database'] = {
     'username': 'admin',
     'password': 'root',
 }
-config['Agent'] = {
+config['Entities'] = {
     'sleep': '5',
     'jitter': '1000',
     'max_retries': '3'

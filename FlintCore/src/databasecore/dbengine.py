@@ -1,90 +1,47 @@
-from datetime import datetime
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
-from FlintCore.src.utils.config_structure import config
+from FlintCore.src.databasecore.Models.agent_model import AgentModel
+from FlintCore.src.databasecore.Models.task_model import TaskModel
+from FlintCore.src.databasecore.base import Base
 
 
 class Database:
-    def __init__(self,config):
+    def __init__(self, config):
         self.config = config
-        self.engine = config['database']['engine']
-        self.conn = self._connect()
-        self.create_tables()
-
-    def create_tables(self):
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='agents'")
-        already_exists = cursor.fetchone() is not None
-        agent = cursor.execute('''
-                       CREATE TABLE IF NOT EXISTS agents
-                       (
-                           agent_id
-                           TEXT
-                           PRIMARY
-                           KEY,
-                           ip
-                           TEXT,
-                           hostname
-                           TEXT,
-                           os
-                           TEXT,
-                           last_seen
-                           TEXT
-                       )
-                       ''')
-        tasks = cursor.execute('''
-                       CREATE TABLE IF NOT EXISTS tasks
-                       (
-                           task_id
-                           TEXT
-                           PRIMARY
-                           KEY,
-                           agent_id
-                           TEXT,
-                           command
-                           TEXT,
-                           status
-                           TEXT,
-                           created_at
-                           TEXT,
-                           FOREIGN
-                           KEY
-                       (
-                           agent_id
-                       ) REFERENCES agents
-                       (
-                           agent_id
-                       )
-                           )
-                       ''')
-        self.conn.commit()
-        if already_exists:
-            print("Tables loaded OK")  # db already existed
-        else:
-            print("Tables created OK")  # fresh database
-
-
-
-
-
-    def _connect(self):
-        if self.engine == 'sqlite':
-            import sqlite3
-            return sqlite3.connect(self.config['database']['path'])
-        elif self.engine == 'mysql':
-            import mysql.connector
-            return mysql.connector.connect(...)
-        else:
-            raise Exception('Database engine not supported')
+        self.engine = create_engine("sqlite:///" + config['database']['path'])
+        self.SessionLocal = sessionmaker(bind=self.engine)
+        Base.metadata.create_all(self.engine)  # replaces entire create_tables method
+        print("Tables OK")
 
     def save_agent(self, agent):
-        cursor = self.conn.cursor()
-        cursor.execute('''
-            INSERT OR REPLACE INTO agents (agent_id, ip, hostname, os, last_seen)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (agent.agent_id, agent.ip, agent.hostname, agent.os, str(agent.last_seen)))
-        self.conn.commit()
+        session = self.SessionLocal()
+        db_agent = AgentModel(
+            agent_id=agent.agent_id,
+            ip=agent.ip,
+            hostname=agent.hostname,
+            os=agent.os,
+            last_seen=str(agent.last_seen)
+        )
+        session.add(db_agent)
+        session.commit()
+        session.close()
 
     def get_agent(self, agent_id):
-        cursor = self.conn.cursor()
-        cursor.execute('SELECT * FROM agents WHERE agent_id = ?', (agent_id,))
-        return cursor.fetchone()
+        session = self.SessionLocal()
+        result = session.query(AgentModel).filter(AgentModel.agent_id == agent_id).first()
+        session.close()
+        return result
+
+    def save_task(self, task):
+        session = self.SessionLocal()
+        db_task = TaskModel(
+            task_id=task.task_id,
+            agent_id=task.agent_id,
+            command=task.command,
+            status=task.status,
+            created_at=str(task.created_at)
+        )
+        session.add(db_task)
+        session.commit()
+        session.close()
